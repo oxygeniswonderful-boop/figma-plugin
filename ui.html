@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f1f1f; --muted: #6b6b6b;
+    --border: #e5e5e5; --accent: #18a0fb; --accent-hover: #0d8de1;
+    --log-bg: #f7f7f8; --log-fg: #2b2b2b;
+    --test: #8a4dff; --hint: #fef9e7; --hint-fg: #6b4e00; --hint-bd: #f3d97a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #2c2c2c; --fg: #f0f0f0; --muted: #a0a0a0;
+      --border: #444; --log-bg: #1f1f1f; --log-fg: #d8d8d8;
+      --hint: #3a3a1a; --hint-fg: #f0d878; --hint-bd: #6b5a1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px;
+    background: var(--bg); color: var(--fg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px; line-height: 1.45;
+  }
+  h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+  .hint {
+    margin-bottom: 10px; padding: 8px 10px;
+    background: var(--hint); color: var(--hint-fg);
+    border: 1px solid var(--hint-bd); border-radius: 4px;
+    font-size: 11px; line-height: 1.4;
+  }
+  .hint code { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; }
+  .row { margin-bottom: 8px; }
+  label { display: block; margin-bottom: 3px; color: var(--muted); font-weight: 500; }
+  input[type="text"], input[type="number"], select {
+    width: 100%; padding: 6px 8px;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--bg); color: var(--fg);
+    font-size: 12px; font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .check { display: flex; align-items: center; gap: 6px; }
+  .check label { margin: 0; color: var(--fg); font-weight: 500; }
+  .check.sub { padding-left: 22px; }
+  .check.sub label { color: var(--muted); font-weight: normal; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  details {
+    margin: 8px 0 12px;
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 6px 10px;
+  }
+  details summary {
+    cursor: pointer; font-weight: 500; color: var(--muted);
+    padding: 2px 0; user-select: none;
+  }
+  details[open] summary { margin-bottom: 6px; }
+  .buttons { display: flex; gap: 6px; margin: 10px 0; }
+  button {
+    flex: 1; padding: 8px 10px; border: none; border-radius: 4px;
+    cursor: pointer; font-size: 12px; font-weight: 500; font-family: inherit;
+  }
+  .primary { background: var(--accent); color: white; }
+  .primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .test-btn { background: var(--test); color: white; }
+  .test-btn:hover:not(:disabled) { opacity: 0.85; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  .secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+  .secondary:hover { background: var(--log-bg); }
+  .log {
+    margin-top: 6px; padding: 8px;
+    background: var(--log-bg); color: var(--log-fg);
+    border: 1px solid var(--border); border-radius: 4px;
+    height: 220px; overflow-y: auto;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 11px; white-space: pre-wrap; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+  <h2>Анализатор структуры фреймов</h2>
+
+  <div class="hint">
+    <b>Перед запуском:</b> запустите CORS-прокси на этой же машине:
+    <code>python3 cors_proxy.py</code>. Подробности — в README.
+  </div>
+
+  <div class="row">
+    <label>Область анализа</label>
+    <select id="scope">
+      <option value="selection">Только выделенные фреймы</option>
+      <option value="page">Все фреймы на странице</option>
+    </select>
+  </div>
+
+  <div class="row check">
+    <input type="checkbox" id="useLLM" checked>
+    <label for="useLLM">Использовать LLM для именования</label>
+  </div>
+
+  <div class="row check">
+    <input type="checkbox" id="renameMinor" checked>
+    <label for="renameMinor">Именовать мелкие элементы (текст, иконки, контейнеры)</label>
+  </div>
+  <div class="row check sub">
+    <input type="checkbox" id="useLLMForMinor" checked>
+    <label for="useLLMForMinor">— использовать LLM для сложных контейнеров</label>
+  </div>
+
+  <details>
+    <summary>Настройки LLM</summary>
+    <div class="row">
+      <label>API URL (через локальный прокси)</label>
+      <input type="text" id="apiUrl" value="http://localhost:8080/v1/chat/completions">
+    </div>
+    <div class="row">
+      <label>API Key</label>
+      <input type="text" id="apiKey" value="test">
+    </div>
+    <div class="row">
+      <label>Модель</label>
+      <input type="text" id="modelName" value="Qwen/Qwen3.5-27B-AWQ">
+    </div>
+    <div class="grid">
+      <div class="row">
+        <label>max_tokens</label>
+        <input type="number" id="maxTokens" value="200">
+      </div>
+      <div class="row">
+        <label>Глубина обхода</label>
+        <input type="number" id="minorMaxDepth" value="8">
+      </div>
+    </div>
+    <div class="row check">
+      <input type="checkbox" id="disableThinking" checked>
+      <label for="disableThinking">Отключить thinking-режим Qwen</label>
+    </div>
+  </details>
+
+  <details>
+    <summary>Параметры геометрии</summary>
+    <div class="row">
+      <label>Размер шрифта заголовка</label>
+      <input type="number" id="headingFontSize" value="48">
+    </div>
+    <div class="grid">
+      <div class="row">
+        <label>Ширина хедера</label>
+        <input type="number" id="headerWidth" value="958">
+      </div>
+      <div class="row">
+        <label>Высота хедера</label>
+        <input type="number" id="headerHeight" value="56">
+      </div>
+    </div>
+    <div class="row">
+      <label>Суммарная высота футера</label>
+      <input type="number" id="footerTotalHeight" value="479">
+    </div>
+  </details>
+
+  <div class="buttons">
+    <button class="primary" id="run">Анализировать</button>
+    <button class="test-btn" id="test">Тест подключения</button>
+    <button class="secondary" id="cancel">Закрыть</button>
+  </div>
+
+  <div class="log" id="log">Готов к работе.
+Сначала нажмите «Тест подключения» — он покажет, видит ли Figma LLM.</div>
+
+<script>
+  const logEl = document.getElementById("log");
+  const runBtn = document.getElementById("run");
+  const testBtn = document.getElementById("test");
+
+  function append(t) { logEl.textContent += t + "\n"; logEl.scrollTop = logEl.scrollHeight; }
+  function v(id) { return document.getElementById(id).value; }
+  function n(id) { return parseFloat(document.getElementById(id).value) || 0; }
+  function b(id) { return document.getElementById(id).checked; }
+
+  function collectConfig(type) {
+    return {
+      type: type,
+      scope: v("scope"),
+      useLLM: b("useLLM"),
+      renameMinor: b("renameMinor"),
+      useLLMForMinor: b("useLLMForMinor"),
+      minorMaxDepth: n("minorMaxDepth") || 8,
+      apiUrl: v("apiUrl"),
+      apiKey: v("apiKey"),
+      modelName: v("modelName"),
+      maxTokens: n("maxTokens") || 200,
+      disableThinking: b("disableThinking"),
+      headingFontSize: n("headingFontSize"),
+      headerWidth: n("headerWidth"),
+      headerHeight: n("headerHeight"),
+      footerTotalHeight: n("footerTotalHeight"),
+    };
+  }
+
+  runBtn.onclick = () => {
+    runBtn.disabled = true; testBtn.disabled = true;
+    runBtn.textContent = "Анализ…";
+    logEl.textContent = "";
+    parent.postMessage({ pluginMessage: collectConfig("analyze") }, "*");
+  };
+
+  testBtn.onclick = () => {
+    runBtn.disabled = true; testBtn.disabled = true;
+    testBtn.textContent = "Проверяю…";
+    logEl.textContent = "";
+    parent.postMessage({ pluginMessage: collectConfig("test") }, "*");
+  };
+
+  document.getElementById("cancel").onclick = () => {
+    parent.postMessage({ pluginMessage: { type: "close" } }, "*");
+  };
+
+  onmessage = (e) => {
+    const msg = e.data.pluginMessage;
+    if (!msg) return;
+    if (msg.type === "log") {
+      append(msg.text);
+    } else if (msg.type === "done") {
+      runBtn.disabled = false; testBtn.disabled = false;
+      runBtn.textContent = "Анализировать";
+      testBtn.textContent = "Тест подключения";
+    }
+  };
+</script>
+</body>
+</html>

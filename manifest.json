@@ -1,0 +1,12 @@
+{
+  "name": "Анализатор структуры фреймов",
+  "id": "frame-structure-analyzer-qwen",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Обращение к локально развёрнутой LLM Qwen во внутренней сети."
+  }
+}
